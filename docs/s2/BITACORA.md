@@ -17,7 +17,7 @@
 | Escenario | Latencia 50 % | Latencia máx. | Respuestas 2xx | Respuestas 503 | Timeouts | bucle.maxMs |
 | --- | --- | --- | --- | --- | --- | --- |
 | 1 · bloqueo (/health) | 6 ms | 5064 ms | 11921 | 0 | No reportados en la captura | 5016 ms |
-| 2 · worker sin límite | PENDIENTE | PENDIENTE | PENDIENTE | PENDIENTE | PENDIENTE | PENDIENTE |
+| 2 · worker sin límite | 2052 ms | 3191 ms | 486 | 0 (no se muestran otros códigos) | PENDIENTE: no visible al final de captura | 261 ms |
 | 3 · pool con límite | PENDIENTE | PENDIENTE | PENDIENTE | PENDIENTE | PENDIENTE | PENDIENTE |
 
 Reiniciar Pedidos con "docker compose restart pedidos" ANTES DE CADA ESCENARIO. Ejecutar la carga, capturar la salida y consultar /metricas al terminar. --renderStatusCodes permite ver cuántos códigos son específicamente 503.
@@ -154,13 +154,57 @@ npx.cmd -y autocannon@8 -c 50 -d 20 --renderStatusCodes "http://localhost:3000/r
 Salida autocannon:
 
 ~~~text
-PENDIENTE: pegar salida real de autocannon (escenario 2)
+Running 20s test @ http://localhost:3000/reporte/worker?n=2000000
+50 connections
+
+Stat      2.5%     50%      97.5%    99%      Avg        Stdev      Max
+Latency   1092 ms  2052 ms  2948 ms  3050 ms  1969.22 ms 524.65 ms  3191 ms
+
+Stat       1%   2.5%   50%   97.5%  Avg     Stdev   Min
+Req/Sec    0    0      19    49     24.3    13.74   7
+Bytes/Sec  0 B  0 B    5.93 kB 15.3 kB 7.58 kB 4.29 kB 2.18 kB
+
+Code Count
+200  486
+
+Req/Bytes counts sampled once per second.
+# of samples: 20
+536 requests in 20.16s, 152 kB read
+
+NOTA: la captura se corta después de esta línea; los 50 intentos de diferencia entre 536 solicitudes y 486 respuestas 200 no se pueden etiquetar como timeouts sin leer el resumen final.
 ~~~
 
 Respuesta /metricas:
 
 ~~~json
-"PENDIENTE: pegar JSON real de /metricas (escenario 2)"
+{
+  "umbralLentaMs": 1000,
+  "nucleos": 16,
+  "bucle": { "p50Ms": 10, "p99Ms": 43, "maxMs": 261 },
+  "rutas": [
+    {
+      "ruta": "GET /health",
+      "peticiones": 6,
+      "promedioMs": 10.1775584999999,
+      "maxMs": 46.1936649999989,
+      "lentas": 0
+    },
+    {
+      "ruta": "GET /reporte/worker",
+      "peticiones": 486,
+      "promedioMs": 1910.79222484568,
+      "maxMs": 2920.280498,
+      "lentas": 486
+    }
+  ],
+  "pool": {
+    "maxTrabajadores": 16,
+    "activos": 0,
+    "enCola": 0,
+    "maxCola": 32,
+    "rechazadas": 0
+  }
+}
 ~~~
 
 ### Escenario 3: pool con límite
@@ -192,10 +236,10 @@ El interceptor mide /health solo cuando Express finalmente empieza a procesarla,
 
 ### 2. ¿Por qué 50 workers simultáneos pueden producir timeouts?
 
-En el escenario 2 se completaron **PENDIENTE peticiones 2xx** y ocurrieron **PENDIENTE timeouts**.
+En el escenario 2 se completaron **486 peticiones HTTP 200**; el número de timeouts sigue **pendiente** porque no se ve en la captura.
 El reporte individual n=2000000 tardó **341 ms** sin saturación en modo worker (277 ms en modo pool).
 Cada solicitud a /reporte/worker crea un hilo nuevo y no existe un cupo global.
-Con 50 peticiones simultáneas, los hilos compiten por CPU y memoria y pagan el coste de creación.
+Con 50 peticiones simultáneas, los hilos compiten por CPU y memoria y pagan el coste de creación; la latencia p50 subió a **2052 ms**.
 La duración de una operación aislada no predice la latencia bajo carga: la saturación puede generar timeouts.
 
 ### 3. ¿Qué diferencia hay entre un 503 inmediato y un timeout?
