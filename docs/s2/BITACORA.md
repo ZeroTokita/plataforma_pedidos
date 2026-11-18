@@ -1,7 +1,8 @@
 # Bitácora · Arquitecturas y procesos · Yakov S.
 
-> Borrador: completar todos los campos PENDIENTE con resultados de las pruebas locales antes de entregar.
+> Resultados obtenidos en pruebas locales con Docker y autocannon. En la salida capturada no se pudo determinar el número exacto de timeouts; se consigna expresamente la limitación sin estimar valores.
 > Repositorio: https://github.com/ZeroTokita/plataforma_pedidos
+> Pull request: https://github.com/ZeroTokita/plataforma_pedidos/pull/3
 
 ## Entorno
 
@@ -17,7 +18,7 @@
 | Escenario | Latencia 50 % | Latencia máx. | Respuestas 2xx | Respuestas 503 | Timeouts | bucle.maxMs |
 | --- | --- | --- | --- | --- | --- | --- |
 | 1 · bloqueo (/health) | 6 ms | 5064 ms | 11921 | 0 | No reportados en la captura | 5016 ms |
-| 2 · worker sin límite | 2052 ms | 3191 ms | 486 | 0 (no se muestran otros códigos) | PENDIENTE: no visible al final de captura | 261 ms |
+| 2 · worker sin límite | 2052 ms | 3191 ms | 486 | 0 (no se muestran otros códigos) | No determinado (salida recortada) | 261 ms |
 | 3 · pool con límite | 1 ms (incluye 503) | 2412 ms | 493 | 16273 | No reportados en la salida visible | 58 ms |
 
 Reiniciar Pedidos con "docker compose restart pedidos" ANTES DE CADA ESCENARIO. Ejecutar la carga, capturar la salida y consultar /metricas al terminar. --renderStatusCodes permite ver cuántos códigos son específicamente 503.
@@ -323,4 +324,4 @@ Para una vista global agregaría métricas; para limitar globalmente los trabajo
 
 ## 4. Uso declarado de IA
 
-Se utilizó ChatGPT para revisar el repositorio, proponer el código de los reportes con trabajadores y del pool, integrar las métricas y preparar el borrador de bitácora. El estudiante debe ejecutar la carga, registrar salidas reales, revisar los resultados y completar el análisis antes de entregar.
+Se utilizó ChatGPT para revisar el repositorio, proponer el código de los reportes con trabajadores y del pool, integrar las métricas y preparar la bitácora. El estudiante ejecutó las pruebas locales con Docker y autocannon, aportó capturas y respuestas de /metricas, y documentó las limitaciones de los datos disponibles. El análisis se basa en esas mediciones y en la descripción de los modelos de fallo.
