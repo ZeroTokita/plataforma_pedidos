@@ -1,6 +1,6 @@
-
 import express, { Request, Response } from "express";
 import { randomUUID } from "node:crypto";
+import { medirLatencia, resumenMetricas } from "./metricas";
 
 const PORT = Number(process.env.PORT ?? 3000);
 
@@ -20,7 +20,7 @@ const pedidos: Pedido[] = [];
 const app = express();
 
 app.use(express.json());
-
+app.use(medirLatencia);
 // Liveness: Pedidos está funcionando
 app.get("/health", (_req: Request, res: Response) => {
   res.json({
@@ -163,7 +163,25 @@ app.post("/pedidos", async (req: Request, res: Response) => {
     });
   }
 });
+// Consultar estadísticas de las peticiones HTTP
+app.get("/metricas", (_req: Request, res: Response) => {
+  res.json(resumenMetricas());
+});
+// Simulación de reporte que bloquea el event loop
+app.get("/reporte/bloqueante", (_req: Request, res: Response) => {
+  const inicio = Date.now();
 
+  // Bloquea el event loop durante 5 segundos
+  while (Date.now() - inicio < 5000) {
+    // Trabajo síncrono simulado
+  }
+
+  res.json({
+    status: "ok",
+    reporte: "bloqueante",
+    duracionMs: Date.now() - inicio
+  });
+});
 app.listen(PORT, () => {
   console.log(
     `Pedidos escuchando en puerto ${PORT}`
