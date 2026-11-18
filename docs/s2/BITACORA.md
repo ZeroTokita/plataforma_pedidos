@@ -18,7 +18,7 @@
 | --- | --- | --- | --- | --- | --- | --- |
 | 1 · bloqueo (/health) | 6 ms | 5064 ms | 11921 | 0 | No reportados en la captura | 5016 ms |
 | 2 · worker sin límite | 2052 ms | 3191 ms | 486 | 0 (no se muestran otros códigos) | PENDIENTE: no visible al final de captura | 261 ms |
-| 3 · pool con límite | PENDIENTE | PENDIENTE | PENDIENTE | PENDIENTE | PENDIENTE | PENDIENTE |
+| 3 · pool con límite | 1 ms (incluye 503) | 2412 ms | 493 | 16273 | No reportados en la salida visible | 58 ms |
 
 Reiniciar Pedidos con "docker compose restart pedidos" ANTES DE CADA ESCENARIO. Ejecutar la carga, capturar la salida y consultar /metricas al terminar. --renderStatusCodes permite ver cuántos códigos son específicamente 503.
 
@@ -215,13 +215,60 @@ npx.cmd -y autocannon@8 -c 50 -d 20 --renderStatusCodes "http://localhost:3000/r
 Salida autocannon:
 
 ~~~text
-PENDIENTE: pegar salida real de autocannon (escenario 3)
+Running 20s test @ http://localhost:3000/reporte/pool?n=2000000
+50 connections
+
+Stat       2.5%  50%   97.5%    99%      Avg       Stdev      Max
+Latency    0 ms  1 ms  1799 ms  1909 ms  56.47 ms  315.67 ms  2412 ms
+
+Stat       1%      2.5%    50%     97.5%    Avg     Stdev    Min
+Req/Sec    403     403     871     1019     838.3   150.04   403
+Bytes/Sec  159 kB  159 kB  344 kB  405 kB   332 kB  59.9 kB  158 kB
+
+Code  Count
+200   493
+503   16273
+
+Req/Bytes counts sampled once per second.
+# of samples: 20
+493 2xx responses, 16273 non 2xx responses
+17k requests in 20.05s, 6.63 MB read
+
+NOTA: la salida visible no muestra un recuento explícito de timeouts.
+La latencia p50 de 1 ms corresponde principalmente a respuestas 503 rápidas y NO a reportes procesados exitosamente.
 ~~~
 
 Respuesta /metricas:
 
 ~~~json
-"PENDIENTE: pegar JSON real de /metricas (escenario 3)"
+{
+  "umbralLentaMs": 1000,
+  "nucleos": 16,
+  "bucle": { "p50Ms": 10, "p99Ms": 16, "maxMs": 58 },
+  "rutas": [
+    {
+      "ruta": "GET /reporte/pool",
+      "peticiones": 16768,
+      "promedioMs": 55.0005717392057,
+      "maxMs": 2207.503625,
+      "lentas": 478
+    },
+    {
+      "ruta": "GET /health",
+      "peticiones": 5,
+      "promedioMs": 0.928750400000354,
+      "maxMs": 1.38880600000266,
+      "lentas": 0
+    }
+  ],
+  "pool": {
+    "maxTrabajadores": 16,
+    "activos": 0,
+    "enCola": 0,
+    "maxCola": 32,
+    "rechazadas": 16274
+  }
+}
 ~~~
 
 ## 2. Análisis
@@ -244,32 +291,34 @@ La duración de una operación aislada no predice la latencia bajo carga: la sat
 
 ### 3. ¿Qué diferencia hay entre un 503 inmediato y un timeout?
 
-En el escenario 3 se recibieron **PENDIENTE respuestas 2xx** y **PENDIENTE respuestas 503**.
-El pool limita la ejecución a **PENDIENTE trabajadores** y la cola a **PENDIENTE solicitudes**.
+En el escenario 3 se recibieron **493 respuestas 2xx** y **16273 respuestas 503**, según autocannon.
+El pool limita la ejecución a **16 trabajadores** y la cola a **32 solicitudes**.
 Al agotar ambos recursos, el servidor emite un rechazo explícito, un fallo reconocido.
 La cabecera Retry-After: 1 permite al cliente planificar su próximo intento.
 Un timeout es un fallo por omisión: el cliente no puede saber si el trabajo se llegó a ejecutar.
 
 ### 4. ¿Qué efecto tuvieron los reintentos inmediatos?
 
-Durante el escenario 3, pool.rechazadas registró **PENDIENTE** rechazos.
+Durante el escenario 3, `pool.rechazadas` registró **16274** rechazos, uno más que los **16273** códigos 503 observados por autocannon.
 Autocannon sigue enviando peticiones aunque haya recibido 503 y no espera automáticamente el tiempo sugerido.
-Esto incrementa el número de rechazos mientras el servidor está saturado.
-El límite protege el número de hilos, pero el servidor sigue gastando recursos atendiendo rechazos.
-Un cliente bien diseñado respetaría Retry-After y aplicaría un límite de reintentos y retroceso con jitter.
+Al mantener la carga con nuevas solicitudes inmediatas, autocannon ocasionó 16273 respuestas 503, frente a 493 respuestas exitosas.
+El límite protegió la concurrencia: bucle.maxMs fue 58 ms, frente a 261 ms del escenario 2; el servidor siguió respondiendo rechazos.
+Un cliente bien diseñado respetaría Retry-After: 1, con límite de intentos, retroceso y jitter para evitar nuevas ráfagas.
 
 ### 5. ¿Qué ocurriría con tres réplicas detrás de un balanceador?
 
 Cada réplica tendría sus métricas, cola y contador de rechazos en memoria propios.
 La respuesta de /metricas solo describiría la instancia que respondió.
-Si cada réplica permite W trabajadores activos, las tres podrían ejecutar hasta **3 × W** reportes a la vez.
-La capacidad de trabajos esperando sería hasta **3 × MAX_COLA**, si la carga se reparte bien.
+Si cada réplica dispone de 16 trabajadores, tres instancias podrían ejecutar **48 reportes** a la vez.
+La capacidad total de espera sería **96 trabajos** (3 × 32), si la carga se reparte bien.
 Para una vista global agregaría métricas; para limitar globalmente los trabajos usaría una cola compartida y consumidores coordinados.
 
 ## 3. Problemas encontrados
 
 - En el main del repositorio faltaban worker-reporte.ts y /reporte/worker. Se incorporó un worker base de un solo uso compartido por ambos modos de reporte.
-- PENDIENTE: documentar errores y soluciones reales de Docker, TypeScript, carga o capacidad.
+- En el segundo intento del escenario 1 se ejecutó autocannon sin las solicitudes bloqueantes, por lo que el monitor solo registró 44 ms; se corrigió repitiendo ambos tipos de carga al mismo tiempo.
+- En el escenario 2 la captura terminó antes del resumen de posibles timeouts. La diferencia entre solicitudes y respuestas 200 no se consideró evidencia suficiente para clasificarlas.
+- En el escenario 3 la latencia mediana de 1 ms resultó engañosa porque incluía 16273 rechazos 503; se compararon por separado los códigos de estado y las métricas del bucle.
 - No se han inventado datos: las mediciones deben obtenerse de la laptop del estudiante.
 
 ## 4. Uso declarado de IA
