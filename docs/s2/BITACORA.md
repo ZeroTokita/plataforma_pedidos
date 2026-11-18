@@ -8,15 +8,15 @@
 | Dato | Valor |
 | --- | --- |
 | Laptop (CPU, RAM) | PENDIENTE: modelo CPU y RAM desde Windows |
-| nucleos según /metricas | PENDIENTE: leer respuesta real |
-| MAX_TRABAJADORES y MAX_COLA | PENDIENTE: leer /metricas.pool; por defecto núcleos disponibles y su doble |
-| Duración de un reporte con n=2000000 | PENDIENTE: duracionMs de /reporte/worker?n=2000000 |
+| nucleos según /metricas | 16 (medido antes del escenario 1 y confirmado en el escenario 1) |
+| MAX_TRABAJADORES y MAX_COLA | 16 y 32, respectivamente (/metricas.pool) |
+| Duración de un reporte con n=2000000 | 341 ms con /reporte/worker y 277 ms con /reporte/pool; una ejecución individual cada uno |
 
 ## 1. Resultados
 
 | Escenario | Latencia 50 % | Latencia máx. | Respuestas 2xx | Respuestas 503 | Timeouts | bucle.maxMs |
 | --- | --- | --- | --- | --- | --- | --- |
-| 1 · bloqueo (/health) | PENDIENTE | PENDIENTE | PENDIENTE | PENDIENTE | PENDIENTE | PENDIENTE |
+| 1 · bloqueo (/health), primer intento | 5 ms | 112 ms | 44345 | 0 | No visible en captura | 5037 ms |
 | 2 · worker sin límite | PENDIENTE | PENDIENTE | PENDIENTE | PENDIENTE | PENDIENTE | PENDIENTE |
 | 3 · pool con límite | PENDIENTE | PENDIENTE | PENDIENTE | PENDIENTE | PENDIENTE | PENDIENTE |
 
@@ -32,14 +32,57 @@ Durante la prueba solicitar dos veces GET /reporte/bloqueante desde Postman o na
 Salida autocannon:
 
 ~~~text
-PENDIENTE: pegar salida real de autocannon (escenario 1)
+Stat      2.5%   50%   97.5%   99%   Avg       Stdev      Max
+Latency   4 ms   5 ms  14 ms   17 ms  6.27 ms   3.44 ms    112 ms
+
+Stat       1%     2.5%   50%    97.5%   Avg     Stdev   Min
+Req/Sec    1505   1505   3127   3343    2956.8  499.51  1505
+Bytes/Sec  408 kB 408 kB 847 kB 906 kB 801 kB 135 kB  408 kB
+
+Code  Count
+200   44345
+
+Req/Bytes counts sampled once per second.
+# of samples: 15
+44k requests in 15.03s, 12 MB read
+
+NOTA: los timeouts no se distinguen en la captura compartida.
 ~~~
 
 Respuesta /metricas:
 
 ~~~json
-"PENDIENTE: pegar JSON real de /metricas (escenario 1)"
+{
+  "umbralLentaMs": 1000,
+  "nucleos": 16,
+  "bucle": { "p50Ms": 10, "p99Ms": 16, "maxMs": 5037 },
+  "rutas": [
+    {
+      "ruta": "GET /health",
+      "peticiones": 44377,
+      "promedioMs": 0.225175026094577,
+      "maxMs": 10.85235200000017,
+      "lentas": 0
+    },
+    {
+      "ruta": "GET /reporte/bloqueante",
+      "peticiones": 2,
+      "promedioMs": 5018.790459,
+      "maxMs": 5031.410657,
+      "lentas": 2
+    }
+  ],
+  "pool": {
+    "maxTrabajadores": 16,
+    "activos": 0,
+    "enCola": 0,
+    "maxCola": 32,
+    "rechazadas": 0
+  }
+}
 ~~~
+
+**Observación de validación:** el bloqueo interno sí se midió (5037 ms), pero autocannon mostró una latencia máxima de 112 ms y unas 44 mil respuestas HTTP 200 en 15 segundos. Eso no confirma que los dos bloqueos de ~5 s coincidieran con la carga. Repetir el escenario con las dos solicitudes bloqueantes dentro de los primeros segundos de autocannon; reemplazar los datos de este primer intento si se obtiene una medición concurrente mejor validada.
 
 ### Escenario 2: un hilo por petición
 
@@ -79,8 +122,8 @@ Respuesta /metricas:
 
 ### 1. ¿Por qué el monitor del bucle ve el bloqueo pero el interceptor no?
 
-El valor máximo de bucle.maxMs en el escenario 1 fue **PENDIENTE ms**.
-El máximo de GET /health dentro de rutas fue **PENDIENTE ms**.
+El valor máximo de bucle.maxMs del primer intento del escenario 1 fue **5037 ms**.
+El máximo de GET /health dentro de rutas fue **10.85 ms**, mientras autocannon registró un máximo de **112 ms**.
 El reporte bloqueante ejecuta trabajo síncrono unos cinco segundos y ocupa el hilo principal.
 El monitor mide el retraso acumulado por un temporizador que no puede ejecutarse durante ese intervalo.
 El interceptor mide /health solo cuando Express finalmente empieza a procesarla, sin contabilizar la espera anterior.
@@ -88,7 +131,7 @@ El interceptor mide /health solo cuando Express finalmente empieza a procesarla,
 ### 2. ¿Por qué 50 workers simultáneos pueden producir timeouts?
 
 En el escenario 2 se completaron **PENDIENTE peticiones 2xx** y ocurrieron **PENDIENTE timeouts**.
-El reporte individual n=2000000 tardó **PENDIENTE ms** sin saturación.
+El reporte individual n=2000000 tardó **341 ms** sin saturación en modo worker (277 ms en modo pool).
 Cada solicitud a /reporte/worker crea un hilo nuevo y no existe un cupo global.
 Con 50 peticiones simultáneas, los hilos compiten por CPU y memoria y pagan el coste de creación.
 La duración de una operación aislada no predice la latencia bajo carga: la saturación puede generar timeouts.
