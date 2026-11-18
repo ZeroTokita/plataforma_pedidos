@@ -16,13 +16,15 @@
 
 | Escenario | Latencia 50 % | Latencia máx. | Respuestas 2xx | Respuestas 503 | Timeouts | bucle.maxMs |
 | --- | --- | --- | --- | --- | --- | --- |
-| 1 · bloqueo (/health), primer intento | 5 ms | 112 ms | 44345 | 0 | No visible en captura | 5037 ms |
+| 1 · bloqueo (/health), prueba más reciente | PENDIENTE: salida autocannon | PENDIENTE: salida autocannon | PENDIENTE: salida autocannon | PENDIENTE: salida autocannon | PENDIENTE: salida autocannon | 5016 ms |
 | 2 · worker sin límite | PENDIENTE | PENDIENTE | PENDIENTE | PENDIENTE | PENDIENTE | PENDIENTE |
 | 3 · pool con límite | PENDIENTE | PENDIENTE | PENDIENTE | PENDIENTE | PENDIENTE | PENDIENTE |
 
 Reiniciar Pedidos con "docker compose restart pedidos" ANTES DE CADA ESCENARIO. Ejecutar la carga, capturar la salida y consultar /metricas al terminar. --renderStatusCodes permite ver cuántos códigos son específicamente 503.
 
 ### Escenario 1: bloqueo (/health)
+
+Se conserva abajo el registro del primer intento. En una repetición con dos solicitudes bloqueantes se midió `bucle.maxMs = 5016` y `GET /health maxMs = 17.155894`; falta la salida de autocannon de esa misma repetición para completar la fila final.
 
 Comando:
 npx.cmd -y autocannon@8 -c 20 -d 15 --renderStatusCodes http://localhost:3000/health
@@ -82,7 +84,44 @@ Respuesta /metricas:
 }
 ~~~
 
-**Observación de validación:** el bloqueo interno sí se midió (5037 ms), pero autocannon mostró una latencia máxima de 112 ms y unas 44 mil respuestas HTTP 200 en 15 segundos. Eso no confirma que los dos bloqueos de ~5 s coincidieran con la carga. Repetir el escenario con las dos solicitudes bloqueantes dentro de los primeros segundos de autocannon; reemplazar los datos de este primer intento si se obtiene una medición concurrente mejor validada.
+**Registro histórico del primer intento:** el bloqueo interno se midió (5037 ms), pero autocannon mostró una latencia máxima de 112 ms. Esto no confirmó la coincidencia temporal de ambos tipos de solicitudes.
+
+#### Repetición con dos solicitudes bloqueantes (datos de /metricas)
+
+La ejecución de autocannon correspondiente todavía no fue proporcionada; **no confundir la captura del primer intento con esta respuesta de /metricas**.
+
+~~~json
+{
+  "umbralLentaMs": 1000,
+  "nucleos": 16,
+  "bucle": { "p50Ms": 10, "p99Ms": 15, "maxMs": 5016 },
+  "rutas": [
+    {
+      "ruta": "GET /health",
+      "peticiones": 11949,
+      "promedioMs": 0.275469261026118,
+      "maxMs": 17.1558939999959,
+      "lentas": 0
+    },
+    {
+      "ruta": "GET /reporte/bloqueante",
+      "peticiones": 2,
+      "promedioMs": 5002.018278,
+      "maxMs": 5002.12127,
+      "lentas": 2
+    }
+  ],
+  "pool": {
+    "maxTrabajadores": 16,
+    "activos": 0,
+    "enCola": 0,
+    "maxCola": 32,
+    "rechazadas": 0
+  }
+}
+~~~
+
+**Pendiente:** agregar la salida de autocannon de este mismo intento (latencia p50 y máxima, códigos 2xx/503 y timeouts) y verificar si los bloqueos coincidieron con peticiones de /health en vuelo.
 
 ### Escenario 2: un hilo por petición
 
@@ -122,8 +161,8 @@ Respuesta /metricas:
 
 ### 1. ¿Por qué el monitor del bucle ve el bloqueo pero el interceptor no?
 
-El valor máximo de bucle.maxMs del primer intento del escenario 1 fue **5037 ms**.
-El máximo de GET /health dentro de rutas fue **10.85 ms**, mientras autocannon registró un máximo de **112 ms**.
+En la repetición con dos reportes bloqueantes, el valor máximo de `bucle.maxMs` fue **5016 ms**.
+El máximo de `GET /health` en `rutas` fue **17.16 ms**; falta la salida de autocannon de la misma repetición.
 El reporte bloqueante ejecuta trabajo síncrono unos cinco segundos y ocupa el hilo principal.
 El monitor mide el retraso acumulado por un temporizador que no puede ejecutarse durante ese intervalo.
 El interceptor mide /health solo cuando Express finalmente empieza a procesarla, sin contabilizar la espera anterior.
