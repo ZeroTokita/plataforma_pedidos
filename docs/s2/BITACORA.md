@@ -7,7 +7,7 @@
 
 | Dato | Valor |
 | --- | --- |
-| Laptop (CPU, RAM) | PENDIENTE: modelo CPU y RAM desde Windows |
+| Laptop (CPU, RAM) | CPU: AMD Ryzen 9 270 w/ Radeon 780M Graphics; RAM: PENDIENTE de confirmar desde Windows |
 | nucleos según /metricas | 16 (medido antes del escenario 1 y confirmado en el escenario 1) |
 | MAX_TRABAJADORES y MAX_COLA | 16 y 32, respectivamente (/metricas.pool) |
 | Duración de un reporte con n=2000000 | 341 ms con /reporte/worker y 277 ms con /reporte/pool; una ejecución individual cada uno |
